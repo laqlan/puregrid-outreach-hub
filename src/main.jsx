@@ -303,17 +303,18 @@ function App({ onLock }) {
     setState(prev => ({ ...prev, campaigns: [campaign, ...prev.campaigns], activeCampaignId: campaign.id }));
     setTab('campaigns');
   }
-  function importCSV(file) {
+  function finishCSVImport(csvText, sourceName = 'CSV upload') {
     if (!activeCampaign) { alert('Create a campaign first.'); return; }
-    Papa.parse(file, {
+    if (!csvText || !String(csvText).trim()) { alert('The CSV looked empty. Try opening the file in Excel/Sheets and saving/downloading it again as CSV.'); return; }
+    Papa.parse(String(csvText), {
       header: true,
       skipEmptyLines: 'greedy',
-      transformHeader: h => String(h || '').trim(),
+      transformHeader: h => String(h || '').replace(/^\uFEFF/, '').trim(),
       complete: ({ data, errors }) => {
         const rows = (data || []).filter(row => Object.values(row || {}).some(v => clean(v)));
         const imported = rows.map(row => makeLead(row, activeCampaign.id));
         const report = {
-          fileName: file?.name || 'CSV upload',
+          fileName: sourceName,
           campaignId: activeCampaign.id,
           campaignName: activeCampaign.name,
           parsedRows: data?.length || 0,
@@ -325,7 +326,7 @@ function App({ onLock }) {
         setState(prev => ({
           ...prev,
           leads: [...imported, ...prev.leads],
-          logs: [{ id: uid('log'), campaignId: activeCampaign.id, type: 'Import', message: `Imported ${imported.length} rows from ${file?.name || 'CSV'}`, createdAt: new Date().toISOString() }, ...prev.logs],
+          logs: [{ id: uid('log'), campaignId: activeCampaign.id, type: 'Import', message: `Imported ${imported.length} rows from ${sourceName}`, createdAt: new Date().toISOString() }, ...prev.logs],
           lastImport: report
         }));
         setSelectedLeadId(imported[0]?.id || null);
@@ -334,6 +335,19 @@ function App({ onLock }) {
       },
       error: (error) => alert(`CSV import failed: ${error.message || error}`)
     });
+  }
+  async function importCSV(file) {
+    if (!activeCampaign) { alert('Create a campaign first.'); return; }
+    if (!file) return;
+    try {
+      const csvText = await file.text();
+      finishCSVImport(csvText, file.name || 'CSV upload');
+    } catch (error) {
+      alert(`CSV file could not be read from your device: ${error?.message || error}. Move the CSV to your Desktop or Downloads as a normal local file, then try again. You can also use the paste-box import on this page.`);
+    }
+  }
+  function importCSVText(csvText) {
+    finishCSVImport(csvText, 'Pasted CSV text');
   }
   function clearActiveCampaignLeads() {
     if (!activeCampaign) return alert('No active campaign selected.');
@@ -395,12 +409,12 @@ function App({ onLock }) {
 
       {tab === 'home' && <Home stats={stats} campaign={activeCampaign} setTab={setTab} newCampaign={newCampaign} />}
       {tab === 'campaigns' && <Campaigns campaigns={state.campaigns} activeId={activeCampaign?.id} setActive={(id)=>updateState({activeCampaignId:id})} updateCampaign={updateCampaign} newCampaign={newCampaign} />}
-      {tab === 'import' && <ImportPanel activeCampaign={activeCampaign} fileInput={fileInput} importCSV={importCSV} leads={leads} lastImport={state.lastImport} clearActiveCampaignLeads={clearActiveCampaignLeads} />}
+      {tab === 'import' && <ImportPanel activeCampaign={activeCampaign} fileInput={fileInput} importCSV={importCSV} importCSVText={importCSVText} leads={leads} lastImport={state.lastImport} clearActiveCampaignLeads={clearActiveCampaignLeads} />}
       {tab === 'queue' && <WorkQueue leads={leads} selectedLead={selectedLead} setSelectedLeadId={setSelectedLeadId} updateLead={updateLead} markLead={markLead} emailForLead={emailForLead} whatsappForLead={whatsappForLead} createSubject={createSubject} settings={state.settings} activeCampaign={activeCampaign} />}
       {tab === 'blast' && <Batch leads={leads} selectedLeads={selectedLeads} toggleAllSelected={toggleAllSelected} updateLead={updateLead} emailForLead={emailForLead} createSubject={createSubject} settings={state.settings} activeCampaign={activeCampaign} sendBatchViaSupabase={sendBatchViaSupabase} />}
       {tab === 'profiles' && <Profiles leads={leads} logs={state.logs} updateLead={updateLead} setSelectedLeadId={(id)=>{setSelectedLeadId(id); setTab('queue')}} />}
       {tab === 'settings' && <Settings settings={state.settings} updateSettings={updateSettings} supabase={supabase} authEmail={authEmail} setAuthEmail={setAuthEmail} magicLink={magicLink} exportData={() => ({ state, csv: exportCSV(state.leads.map(l => ({...l, campaignName: state.campaigns.find(c=>c.id===l.campaignId)?.name || ''}))), activeCsv: exportCSV(leads.map(l => ({...l, campaignName: activeCampaign?.name || ''}))) })} importState={(s)=>setState(s)} activeCampaign={activeCampaign} activeCount={leads.length} />}
-      <input ref={fileInput} className="hidden-file" type="file" accept=".csv" onChange={e => e.target.files?.[0] && importCSV(e.target.files[0])} />
+      <input ref={fileInput} className="hidden-file" type="file" accept=".csv,text/csv" onChange={async e => { const f = e.target.files?.[0]; if (f) await importCSV(f); e.target.value = ''; }} />
     </main>
     <div className="mobile-tabbar">{nav.map(([id,label]) => <button key={id} onClick={() => setTab(id)} className={tab===id?'active':''}>{label}</button>)}</div>
   </div>;
@@ -436,7 +450,8 @@ function Campaigns({campaigns,activeId,setActive,updateCampaign,newCampaign}) { 
     <details><summary>WhatsApp template</summary><textarea style={{minHeight:160}} value={c.whatsappTemplate} onChange={e=>updateCampaign(c.id,{whatsappTemplate:e.target.value})}/></details>
   </div>)}</div>
 </div>; }
-function ImportPanel({activeCampaign,fileInput,importCSV,leads,lastImport,clearActiveCampaignLeads}) {
+function ImportPanel({activeCampaign,fileInput,importCSV,importCSVText,leads,lastImport,clearActiveCampaignLeads}) {
+  const [pastedCsv, setPastedCsv] = useState('');
   const withEmail = leads.filter(l => l.email).length;
   const withWhatsapp = leads.filter(l => l.whatsapp).length;
   const missingEmail = leads.length - withEmail;
@@ -448,6 +463,7 @@ Non-empty rows: {lastImport.nonEmptyRows}
 Imported rows: {lastImport.importedRows}
 Campaign: {lastImport.campaignName}
 Errors: {lastImport.errors || 'None'}</div>}</div>
+  <div className="card"><div className="card-title">Paste CSV fallback</div><p>If the browser cannot read the uploaded file from your device, open the CSV, copy everything, paste it here, then import.</p><textarea className="code-input" value={pastedCsv} onChange={e=>setPastedCsv(e.target.value)} placeholder="Paste your CSV contents here, including the header row..."/><div className="actions"><button className="btn primary" disabled={!activeCampaign || !pastedCsv.trim()} onClick={()=>importCSVText(pastedCsv)}>Import pasted CSV</button><button className="btn" onClick={()=>setPastedCsv('')}>Clear paste box</button></div></div>
   <div className="card"><div className="card-title">Expected columns</div><p>Any of these names are accepted. You do not need perfect headers.</p><div className="preview-box">Business Name / Company / Name
 Email / All Emails Found / Decision Maker Emails
 Website / URL / Domain

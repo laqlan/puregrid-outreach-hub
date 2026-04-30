@@ -127,3 +127,9 @@ tr:hover td { background: rgba(255,255,255,.025); }
 }
 .auth-button { width: 100%; margin-top: 4px; }
 .auth-helper { margin-top: 14px; }
+.code-input {
+  min-height: 180px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  white-space: pre;
+}
