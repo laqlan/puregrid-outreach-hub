@@ -101,3 +101,6 @@ Default password: `pg2180`
 After a successful sign-in, the browser remembers the admin session for 7 days on that device. Use **Lock admin** in the sidebar to sign out early.
 
 Important: because GitHub Pages is static hosting, this is a client-side gate. It keeps casual visitors out of the UI, but it is not the same as server-side authentication. For stronger protection on `outreach.puregrid.es`, put the app behind Cloudflare Access, Supabase Auth, or server-side hosting.
+
+## Blank page fix
+This repo includes `vite.config.js` with `base: './'` so GitHub Pages works before and after connecting the custom domain.
