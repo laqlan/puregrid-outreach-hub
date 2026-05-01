@@ -1,9 +1,9 @@
 {
   "name": "PureGrid Outreach Hub",
-  "short_name": "PG Outreach",
-  "start_url": ".",
+  "short_name": "Outreach Hub",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#0b1018",
-  "theme_color": "#ff9600",
+  "background_color": "#10131a",
+  "theme_color": "#10131a",
   "icons": []
 }

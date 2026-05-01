@@ -1,82 +1,47 @@
--- PureGrid Outreach Hub schema for Supabase
--- Run this in Supabase SQL Editor after creating your project.
+-- PureGrid Outreach Hub Supabase sync schema
+-- Run this in Supabase → SQL Editor → New query → Run.
 
-create table if not exists public.campaigns (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id) on delete cascade,
-  name text not null,
-  niche text,
-  service_offer text,
-  demo_link text,
-  tone text,
-  email_template text,
-  whatsapp_template text,
-  daily_limit integer default 50,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
+create extension if not exists pgcrypto;
 
-create table if not exists public.leads (
+create table if not exists public.crm_states (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id) on delete cascade,
-  campaign_id uuid references public.campaigns(id) on delete cascade,
-  business_name text,
+  user_id uuid not null references auth.users(id) on delete cascade,
   email text,
-  all_emails text,
-  phone text,
-  whatsapp text,
-  website text,
-  domain text,
-  city text,
-  country text,
-  facebook text,
-  instagram text,
-  linkedin text,
-  contact_form text,
-  human_angle text,
-  notes text,
-  status text default 'New',
-  last_contacted date,
-  replies integer default 0,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id)
 );
 
-create table if not exists public.outreach_logs (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id) on delete cascade,
-  campaign_id uuid references public.campaigns(id) on delete cascade,
-  lead_id uuid references public.leads(id) on delete cascade,
-  type text,
-  message text,
-  provider text,
-  provider_message_id text,
-  created_at timestamptz default now()
-);
+alter table public.crm_states enable row level security;
 
-create table if not exists public.suppressions (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id) on delete cascade,
-  email text,
-  reason text,
-  created_at timestamptz default now(),
-  unique(user_id, email)
-);
+drop policy if exists "Users can view their own CRM state" on public.crm_states;
+create policy "Users can view their own CRM state"
+  on public.crm_states for select
+  using (auth.uid() = user_id);
 
-alter table public.campaigns enable row level security;
-alter table public.leads enable row level security;
-alter table public.outreach_logs enable row level security;
-alter table public.suppressions enable row level security;
+drop policy if exists "Users can insert their own CRM state" on public.crm_states;
+create policy "Users can insert their own CRM state"
+  on public.crm_states for insert
+  with check (auth.uid() = user_id);
 
-do $$ begin
-  create policy "campaigns owner" on public.campaigns for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-exception when duplicate_object then null; end $$;
-do $$ begin
-  create policy "leads owner" on public.leads for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-exception when duplicate_object then null; end $$;
-do $$ begin
-  create policy "logs owner" on public.outreach_logs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-exception when duplicate_object then null; end $$;
-do $$ begin
-  create policy "suppressions owner" on public.suppressions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-exception when duplicate_object then null; end $$;
+drop policy if exists "Users can update their own CRM state" on public.crm_states;
+create policy "Users can update their own CRM state"
+  on public.crm_states for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_crm_states_updated_at on public.crm_states;
+create trigger set_crm_states_updated_at
+before update on public.crm_states
+for each row execute function public.set_updated_at();
