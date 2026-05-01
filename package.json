@@ -1,7 +1,7 @@
 {
-  "name": "puregrid-outreach-hub-mvp",
-  "version": "1.0.0",
+  "name": "puregrid-outreach-hub",
   "private": true,
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -12,7 +12,9 @@
     "@vitejs/plugin-react": "latest",
     "vite": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "@supabase/supabase-js": "latest",
+    "papaparse": "latest"
   },
   "devDependencies": {}
 }
